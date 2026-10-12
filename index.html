@@ -1,0 +1,223 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FastFilter — Learn Smarter</title>
+<style>
+:root {
+  --bg: #f5f7ff;
+  --card: #ffffff;
+  --text: #17213b;
+  --muted: #69738b;
+  --primary: #5b4bdb;
+  --border: #e5e8f3;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+header {
+  padding: 20px 7%;
+  background: white;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.logo { font-size: 23px; font-weight: 800; }
+.logo span { color: var(--primary); }
+.tag { color: var(--muted); font-size: 13px; }
+main { max-width: 950px; margin: 42px auto; padding: 0 18px; }
+.hero { text-align: center; margin-bottom: 30px; }
+.hero h1 { font-size: clamp(30px, 6vw, 48px); margin: 0 0 12px; }
+.hero h1 span { color: var(--primary); }
+.hero p { color: var(--muted); line-height: 1.6; }
+.card {
+  background: var(--card);
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 28px #24346b08;
+}
+label { display: block; font-weight: 700; margin-bottom: 12px; }
+textarea {
+  width: 100%;
+  min-height: 210px;
+  padding: 15px;
+  border: 1px solid #d9deed;
+  border-radius: 12px;
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
+}
+textarea:focus { outline: 2px solid #b8b0ff; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
+button {
+  padding: 12px 17px;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  background: #eeecff;
+  color: var(--primary);
+}
+button.primary { background: var(--primary); color: white; }
+button:hover { opacity: .88; }
+#output { display: none; }
+#result { white-space: pre-wrap; line-height: 1.8; overflow-wrap: anywhere; }
+.status { font-size: 13px; color: var(--muted); margin-top: 12px; }
+footer { text-align: center; padding: 25px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Fast<span>Filter</span></div>
+  <div class="tag">Your personal study workspace</div>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Less noise. <span>More learning.</span></h1>
+    <p>Turn long lessons into focused revision materials.<br>
+    Paste your lesson and choose what you need.</p>
+  </section>
+
+  <section class="card">
+    <label for="lesson">Paste your lesson here</label>
+    <textarea id="lesson" placeholder="Paste a biology, physics, chemistry, or other lesson here..."></textarea>
+    <div class="actions">
+      <button class="primary" onclick="generate('notes')">✦ Filter Key Notes</button>
+      <button onclick="generate('keywords')">Find Keywords</button>
+      <button onclick="generate('quiz')">Practice Quiz</button>
+    </div>
+    <p class="status">Your text is processed in this browser in this prototype.</p>
+  </section>
+
+  <section class="card" id="output">
+    <h2 id="resultTitle">Your study materials</h2>
+    <div id="result"></div>
+    <div class="actions">
+      <button onclick="copyResult()">Copy Results</button>
+      <button onclick="downloadResult()">Download Notes</button>
+    </div>
+    <p class="status" id="feedback"></p>
+  </section>
+</main>
+
+<footer>FastFilter · Built to make learning clearer.</footer>
+
+<script>
+const stopWords = new Set([
+  "the","and","for","are","was","were","with","that","this","from",
+  "have","has","had","its","into","their","there","which","when",
+  "where","what","will","would","could","should","than","then",
+  "they","them","these","those","also","because","about","been",
+  "being","each","such","some","more","most","very","often","only",
+  "not","but","can","may","might","all","any","you","your","our",
+  "his","her","she","him","who","how","why","use","used","using",
+  "a","an","of","in","on","at","to","is","it","as","by","or","if"
+]);
+
+let latestResult = "";
+
+function generate(mode) {
+  const text = document.getElementById("lesson").value.trim();
+  if (text.length < 30) {
+    alert("Please paste a lesson of at least 30 characters.");
+    return;
+  }
+
+  const sentences = text
+    .replace(/\s+/g, " ")
+    .match(/[^.!?]+[.!?]?/g)
+    ?.map(s => s.trim())
+    .filter(s => s.length > 0) || [text];
+
+  const words = text.toLowerCase().match(/\b[a-zA-Z][a-zA-Z'-]*\b/g) || [];
+  const frequency = {};
+
+  words.forEach(word => {
+    if (!stopWords.has(word) && word.length > 2) {
+      frequency[word] = (frequency[word] || 0) + 1;
+    }
+  });
+
+  const keywords = Object.entries(frequency)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 12)
+    .map(([word]) => word);
+
+  let title = "";
+  let result = "";
+
+  if (mode === "keywords") {
+    title = "Important Keywords";
+    result = keywords.length
+      ? keywords.map((w, i) => `${i + 1}. ${w}`).join("\n")
+      : "No useful keywords were found. Try a longer lesson.";
+  } else if (mode === "notes") {
+    title = "Your Revision Notes";
+    const ranked = sentences.map((sentence, index) => {
+      const sentenceWords = sentence.toLowerCase()
+        .match(/\b[a-zA-Z][a-zA-Z'-]*\b/g) || [];
+      const score = sentenceWords.reduce(
+        (sum, word) => sum + (frequency[word] || 0), 0
+      ) / Math.max(sentenceWords.length, 1);
+      return { sentence, index, score };
+    });
+
+    result = "KEY TERMS\n" + keywords.join(", ") +
+      "\n\nIMPORTANT SENTENCES\n" +
+      ranked.sort((a, b) => b.score - a.score)
+        .slice(0, Math.min(5, sentences.length))
+        .sort((a, b) => a.index - b.index)
+        .map(s => "• " + s.sentence).join("\n\n");
+  } else {
+    title = "Practice Quiz";
+    const candidates = sentences.filter(s => s.length > 25).slice(0, 5);
+    result = candidates.length
+      ? candidates.map((s, i) =>
+          `${i + 1}. Explain this idea in your own words:\n${s}\n`
+        ).join("\n")
+      : "Add a longer lesson to create practice questions.";
+    result += "\nThese are practice prompts, not AI-generated questions.";
+  }
+
+  latestResult = result;
+  document.getElementById("resultTitle").textContent = title;
+  document.getElementById("result").textContent = result;
+  document.getElementById("output").style.display = "block";
+  document.getElementById("feedback").textContent =
+    "Prototype output: review the notes for accuracy.";
+  document.getElementById("output").scrollIntoView({ behavior: "smooth" });
+}
+
+async function copyResult() {
+  try {
+    await navigator.clipboard.writeText(latestResult);
+    document.getElementById("feedback").textContent = "Copied successfully!";
+  } catch {
+    document.getElementById("feedback").textContent =
+      "Copy isn't available in this browser. Select the text and copy it manually.";
+  }
+}
+
+function downloadResult() {
+  const blob = new Blob([latestResult], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "FastFilter-Notes.txt";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+  </html>
+    
